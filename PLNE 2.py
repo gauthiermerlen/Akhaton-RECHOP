@@ -119,7 +119,7 @@ for task in tasks_data:
 instance = Instance(nb_operators, alpha, beta, jobs, tasks, operators)
 
 
-def PNLE1(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'invités
+def PLNE2(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'invités
     model= Model();
     # Définition des variables
     b = {}  # Starting time for a task
@@ -131,25 +131,9 @@ def PNLE1(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
     U = {}  # Unit of penalty
     T = {}  # Tardiness
 
-    f = {}  # 1 si bj+pj>=bi O sinon
-    g = {}  # 1 si bi>=bj O sinon
-    x = {}  # 1 si mi=mj ou oi=oj
-    mb = {} # 1 si mi=mj
-    ob = {} # 1 si oi=oj
-    am = {}  # valeur absolue de mi - mj
-    mp = {} # partie positive de mi - mj
-    mn = {} # partie negative de mi - mj
-    y = {}  # variable utilisée pour calculer am
-    ao = {} # valeur absolue de oi - oj
-    op = {} # partie positive de oi - oj
-    on = {} # partie negative de oi - oj
-    z = {}  # variable utilisée pour calculer ao
-
-    g = {} # 1 si bj+pj>=bi 0 sinon
-    f = {} # 1 si bi>=bj
-    k = {}
-
-
+    y={}    # 1 if task i is performed before task j
+    x={}    # 1 if task i is performed on machine k
+    z={}    # 1 if task i is performed on machine k with operator o
 
     for i in range(1,nb_tasks+1):
         # Par défaut lb=0 et ub=+infini
@@ -157,27 +141,18 @@ def PNLE1(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
         c[i] = model.addVar(name="c" + str(i), vtype=GRB.INTEGER)  # Finishing time for task i
         m[i] = model.addVar(name="m" + str(i), vtype=GRB.INTEGER)  # Machine used for task i
         o[i] = model.addVar(name="o" + str(i), vtype=GRB.INTEGER)  # Operator used for task i
-        for j in range(1,nb_tasks+1):
-            f[i,j] = model.addVar(name="f" + str(i) + str(j), vtype=GRB.BINARY, lb=0, ub=1)
-            g[i,j] = model.addVar(name="g" + str(i) + str(j), vtype=GRB.BINARY, lb=0, ub=1)
-            x[i,j] = model.addVar(name="x" + str(i) + str(j), vtype=GRB.BINARY, lb=0, ub=1)
-            mb[i,j] = model.addVar(name="mb" + str(i) + str(j), vtype=GRB.BINARY, lb=0, ub=1)
-            ob[i,j] = model.addVar(name="ob" + str(i) + str(j), vtype=GRB.BINARY, lb=0, ub=1)
-            y[i,j] = model.addVar(name="y" + str(i) + str(j), vtype=GRB.INTEGER)
-            mp[i,j] = model.addVar(name="mp" + str(i) + str(j), vtype=GRB.INTEGER)
-            mn[i,j] = model.addVar(name="mn" + str(i) + str(j), vtype=GRB.INTEGER)
-            am[i,j] = model.addVar(name="am" + str(i) + str(j), vtype=GRB.INTEGER)
-            z[i,j] = model.addVar(name="z" + str(i) + str(j), vtype=GRB.INTEGER)
-            op[i,j] = model.addVar(name="op" + str(i) + str(j), vtype=GRB.INTEGER)
-            on[i,j] = model.addVar(name="on" + str(i) + str(j), vtype=GRB.INTEGER)
-            ao[i,j] = model.addVar(name="ao" + str(i) + str(j), vtype=GRB.INTEGER)
-            g[i,j] = model.addVar(name="g" + str(i) + str(j), vtype=GRB.BINARY)
-            f[i,j] = model.addVar(name="f" + str(i) + str(j), vtype=GRB.BINARY)
+        for j in range(i,nb_tasks+1):
+            y[i,j]=model.addVar(name="y" + str(i) + str(j), vtype=GRB.BINARY) # 1 si tache i avant j
+
+
+        for k in range(1,nb_machines+1):
+            x[i, k] = model.addVar(name="x" + str(i) + str(k), vtype=GRB.BINARY) # 1 si la tache i est faite sur la machine k
+            for l in range(nb_operators):
+                z[i, k, l] = model.addVar(name="z" + str(i) + str(k) + str(l), vtype=GRB.BINARY)  # 1 si la tache i est faite sur la machine k
 
 
 
-
-    for j in range(instance.nb_jobs()):
+    for j in range(1,instance.nb_jobs()+1):
         B[j] = model.addVar(name="B" + str(j), vtype=GRB.INTEGER)  # Starting time for job i
         C[j] = model.addVar(name="x" + str(j), vtype=GRB.INTEGER)  # Finishing time of work j
         U[j] = model.addVar(name="x" + str(j), vtype=GRB.BINARY, lb=0, ub=1)  # Tardiness of job j
@@ -187,90 +162,59 @@ def PNLE1(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
     # Fonction objectif
     model.setObjective(
         quicksum(
-            jobs[j].weight * (C[j] + instance.alpha * U[j] + instance.beta * T[j]) for j in range(instance.nb_jobs())),
+            jobs[j-1].weight * (C[j] + instance.alpha * U[j] + instance.beta * T[j]) for j in range(1,instance.nb_jobs()+1)),
         GRB.MINIMIZE)
 
     # Définition des contraintes
     # Contrainte 1
-    for i in range(1,nb_tasks+1):
+    for i in range(1, nb_tasks+1): #vérifiée
         model.addConstr(c[i] == (b[i] + instance.tasks[i-1].processing_time))
 
-
-
     # Contrainte 2
-    for j in range(instance.nb_jobs()):
-        model.addConstr(B[j] == b[instance.jobs[j].task_sequence[0]])
+    for j in range(1, instance.nb_jobs()+1): #vérifiée
+        model.addConstr(B[j] == b[instance.jobs[j-1].task_sequence[0]])
 
     # Contrainte 3
-    print(nb_tasks)
-    for j in range(instance.nb_jobs()):
-        model.addConstr(C[j] == c[instance.jobs[j].task_sequence[-1]])
+    for j in range(1,instance.nb_jobs()+1): #vérifiée
+        model.addConstr(C[j] == c[instance.jobs[j-1].task_sequence[-1]])
 
     # Contrainte 4
-    for j in range(instance.nb_jobs()):
-        model.addConstr(B[j] >= instance.jobs[j].release_date)
+    for j in range(1,instance.nb_jobs()+1): #vérifiée
+        model.addConstr(B[j] >= instance.jobs[j-1].release_date)
 
     # Contrainte 5
-    for j in range(instance.nb_jobs()):
-      for i in range(1,len(instance.jobs[j].task_sequence)):
-        model.addConstr((b[instance.jobs[j].task_sequence[i]]) >= c[instance.jobs[j].task_sequence[i-1]])
+    for j in range(1, instance.nb_jobs()+1): #vérifiée
+        for i in range(len(instance.jobs[j-1].task_sequence)-1):
+            model.addConstr((b[instance.jobs[j-1].task_sequence[i+1]]) >= c[instance.jobs[j-1].task_sequence[i]])
 
     # Contrainte 6
     M=1000000
-    for j in range(instance.nb_jobs()):
+    for j in range(1, instance.nb_jobs()+1):
+        model.addConstr(T[j] >= C[j] - instance.jobs[j-1].due_date)
+        model.addConstr(T[j] >= 0)
         model.addConstr(U[j] >= T[j]/M)
         model.addConstr(U[j] <= 1)
 
-    # Contrainte 7
-    # Partie 1 coder les x[i][j]
-    for i in range(1,nb_tasks+1):
-        for j in range(1,nb_tasks+1):
-            # Contraintes sur les x[i][j] à partir des mb[i][j] et ob[i][j]
-            model.addConstr(x[i,j] <= mb[i,j] + ob[i,j])
-            model.addConstr(x[i,j] >= (mb[i,j]+ob[i,j])/2)
-
-            # Contraintes sur les mb[i][j] à partir des y[i][j]
-            model.addConstr(1 - mb[i,j] >= am[i,j]/(2*M))
-            model.addConstr(1 - mb[i,j] <= am[i,j])
-            model.addConstr(m[i] - m[j] == mp[i,j] - mn[i,j])
-            model.addConstr(am[i,j] == mp[i,j] + mn[i,j])
-            model.addConstr(y[i,j] >= (m[i] - m[j])/(2*M))
-            model.addConstr(y[i,j] <= (m[i] - m[j]+M) / M)
-            model.addConstr(mp[i,j] <= y[i,j]*M)
-            model.addConstr(mn[i,j] <= (1-y[i,j]) * M)
-            model.addConstr(mn[i,j] >= 0)
-            model.addConstr(mp[i,j] >= 0)
-
-            # Contraintes sur les ob[i][j] à partir des z[i][j]
-            model.addConstr(1 - ob[i,j] >= ao[i,j] / (2 * M))
-            model.addConstr(1 - ob[i,j] <= ao[i,j])
-            model.addConstr(o[i] - o[j] == op[i,j] - on[i,j])
-            model.addConstr(ao[i,j] == op[i,j] + on[i,j])
-            model.addConstr(z[i,j] >= (o[i] - o[j]) / (2 * M))
-            model.addConstr(z[i,j] <= (o[i] - o[j] + M) / M)
-            model.addConstr(op[i,j] <= z[i,j] * M)
-            model.addConstr(on[i,j] <= (1 - z[i,j]) * M)
-            model.addConstr(on[i,j] >= 0)
-            model.addConstr(op[i,j] >= 0)
-
-
-            # Contraintes sur les bi et les bj
-    for i in range(1,nb_tasks+1):
-        for j in range(1,nb_tasks+1):
-            model.addConstr(b[i]+instance.tasks[i-1].processing_time+b[j]>=instance.tasks[i-1].processing_time*f[i,j])
-            model.addConstr(b[i]-b[j] <= instance.tasks[i-1].processing_time*g[i,j])
-
-            # Contraintes sur les f[i][j] et g[i][j]
-            model.addConstr(g[i,j] >= (b[i] - b[j])/M)
-            model.addConstr(g[i,j] <= (b[i] - b[j]+M) / M)
-            model.addConstr(f[i,j] >= (b[j]+instance.tasks[j-1].processing_time - b[i]) / M)
-            model.addConstr(f[i,j] <= (b[j] +instance.tasks[j-1].processing_time - b[i] + M) / M)
     model.optimize()
 
-    print('Obj: %g' % m.ObjVal)
-    return('Obj: %g' % m.ObjVal)
+    # Contrainte 7
+    #print('x',x)
+    #print('y',y)
+    for i in range(1,nb_tasks+1):
+        for j in range(i,nb_tasks+1):
+            for k in instance.tasks[i-1].machines:
+                #print('i,j',(i,j))
+                #print('i,k',(i,k))
+                #print('j,k',(j,k))
+                model.addConstr(c[i] - b[j] <= -M * (1 - y[i, j]) - M * (2 - x[i, k] - x[j, k]))
+                model.addConstr((c[j] - b[i]) <= (-M * y[i, j] - M * (2 - x[i, k] - x[j, k])))
 
-PNLE1(nb_tasks)
+
+    #print('Obj: %g' % model.ObjVal)
+    return('Obj: %g' % model.ObjVal)
+
+
+PLNE2(nb_tasks)
 
 '''
     # Contrainte chaque invité est à une table

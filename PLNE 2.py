@@ -154,6 +154,10 @@ def PLNE2(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
 
     y={}    # 1 if task i is performed before task j
     x={}    # 1 if task i is performed on machine k
+    absx = {}   #
+    xp = {}
+    xn = {}
+    a = {}
     z={}    # 1 if task i is performed on machine k with operator o
 
     for i in range(1, nb_tasks+1):
@@ -164,6 +168,12 @@ def PLNE2(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
         o[i] = model.addVar(name="o" + str(i), vtype=GRB.INTEGER)  # Operator used for task i
         for j in range(1, nb_tasks+1):
             y[i, j] = model.addVar(name="y" + str(i) + str(j), vtype=GRB.BINARY)  # 1 si tache i avant j
+
+        for k in instance.tasks[i-1].machines:
+            absx[i, k] = model.addVar(name="absx" + str(i) + str(k), vtype=GRB.INTEGER)
+            xp[i, k] = model.addVar(name="xp" + str(i) + str(k), vtype=GRB.INTEGER)
+            xn[i, k] = model.addVar(name="xn" + str(i) + str(k), vtype=GRB.INTEGER)
+            a[i, k] = model.addVar(name="xn" + str(i) + str(k), vtype=GRB.BINARY)
 
         for k in range(1,nb_machines+1):
             x[i, k] = model.addVar(name="x" + str(i) + str(k), vtype=GRB.BINARY)  # 1 si la tache i est faite sur la machine k
@@ -198,7 +208,7 @@ def PLNE2(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
     # Contrainte 3
     for j in range(1,instance.nb_jobs()+1): #vérifiée
         model.addConstr(C[j] == c[instance.jobs[j-1].task_sequence[-1]])
-
+    print(instance.operators)
     # Contrainte 4
     for j in range(1,instance.nb_jobs()+1): #vérifiée
         model.addConstr(B[j] >= instance.jobs[j-1].release_date)
@@ -221,8 +231,24 @@ def PLNE2(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
     # Contrainte 7
     #print('x',x)
     #print('y',y)
+    # Définition des xik
+    for i in range(1,nb_tasks+1):
+        for k in instance.tasks[i-1].machines:
+            model.addConstr(1 - x[i, k] >= absx[i, k] / (2 * M))
+            model.addConstr(1 - x[i, k] <= absx[i, k])
+            model.addConstr(m[i] - k == xp[i, k] - xn[i, k])
+            model.addConstr(absx[i, k] == xp[i, k] + xn[i, k])
+            model.addConstr(a[i, k] >= (m[i] - k) / (2 * M))
+            model.addConstr(a[i, k] <= (m[i] - k + M) / M)
+            model.addConstr(xp[i, k] <= a[i, k] * M)
+            model.addConstr(xn[i, k] <= (1 - y[i, j]) * M)
+
     for i in range(1,nb_tasks+1):
         for j in range(i+1,nb_tasks+1):
+            #Définition de yij
+            model.addConstr(y[i, j] >= (b[j]-b[i])/M)
+            model.addConstr(y[i, j] <= (-b[i] + b[j] + M) / M)
+
             #contrainte sur les machines
             for k in instance.tasks[i-1].machines:
                 #print('i,j',(i,j))
@@ -230,6 +256,7 @@ def PLNE2(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
                 #print('j,k',(j,k))
                 model.addConstr(c[i] - b[j] <= -M * (1 - y[i, j]) - M * (2 - x[i, k] - x[j, k]))
                 model.addConstr((c[j] - b[i]) <= (-M * y[i, j] - M * (2 - x[i, k] - x[j, k])))
+
             #contrainte sur les opérateurs
             for l in new_operator[i-1]:
                 model.addConstr(c[i] - b[j] <= -M * (1 - y[i, j]) - M * (2 - z[i, l] - z[j, l]))

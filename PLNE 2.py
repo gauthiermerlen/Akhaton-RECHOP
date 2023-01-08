@@ -118,6 +118,27 @@ for task in tasks_data:
 
 instance = Instance(nb_operators, alpha, beta, jobs, tasks, operators)
 
+def intersection(lst1, lst2):
+    lst3 = [value for value in lst1 if value in lst2]
+    return lst3
+
+def new_operator():
+    liste=[]
+    for i in range(nb_tasks):
+        list=[]
+        for m in range(nb_machines):
+            if instance.operators[i,m]!=None:
+                for k in instance.operators[i,m]:
+                    if k not in list:
+                        list.append(k)
+        liste.append(list)
+    return liste
+new_operator=new_operator()
+#print(new_operator)
+#print(instance.operators)
+
+
+
 
 def PLNE2(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'invités
     model= Model();
@@ -135,20 +156,20 @@ def PLNE2(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
     x={}    # 1 if task i is performed on machine k
     z={}    # 1 if task i is performed on machine k with operator o
 
-    for i in range(1,nb_tasks+1):
+    for i in range(1, nb_tasks+1):
         # Par défaut lb=0 et ub=+infini
         b[i] = model.addVar(name="b" + str(i), vtype=GRB.INTEGER)  # Starting time for task i
         c[i] = model.addVar(name="c" + str(i), vtype=GRB.INTEGER)  # Finishing time for task i
         m[i] = model.addVar(name="m" + str(i), vtype=GRB.INTEGER)  # Machine used for task i
         o[i] = model.addVar(name="o" + str(i), vtype=GRB.INTEGER)  # Operator used for task i
-        for j in range(i,nb_tasks+1):
-            y[i,j]=model.addVar(name="y" + str(i) + str(j), vtype=GRB.BINARY) # 1 si tache i avant j
-
+        for j in range(1, nb_tasks+1):
+            y[i, j] = model.addVar(name="y" + str(i) + str(j), vtype=GRB.BINARY)  # 1 si tache i avant j
 
         for k in range(1,nb_machines+1):
-            x[i, k] = model.addVar(name="x" + str(i) + str(k), vtype=GRB.BINARY) # 1 si la tache i est faite sur la machine k
-            for l in range(nb_operators):
-                z[i, k, l] = model.addVar(name="z" + str(i) + str(k) + str(l), vtype=GRB.BINARY)  # 1 si la tache i est faite sur la machine k
+            x[i, k] = model.addVar(name="x" + str(i) + str(k), vtype=GRB.BINARY)  # 1 si la tache i est faite sur la machine k
+
+        for l in range(1, nb_operators+1):
+            z[i, l] = model.addVar(name="z" + str(i) + str(l), vtype=GRB.BINARY)  # 1 si la tache i est faite par l'opérateur l
 
 
 
@@ -201,13 +222,19 @@ def PLNE2(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
     #print('x',x)
     #print('y',y)
     for i in range(1,nb_tasks+1):
-        for j in range(i,nb_tasks+1):
+        for j in range(i+1,nb_tasks+1):
+            #contrainte sur les machines
             for k in instance.tasks[i-1].machines:
                 #print('i,j',(i,j))
                 #print('i,k',(i,k))
                 #print('j,k',(j,k))
                 model.addConstr(c[i] - b[j] <= -M * (1 - y[i, j]) - M * (2 - x[i, k] - x[j, k]))
                 model.addConstr((c[j] - b[i]) <= (-M * y[i, j] - M * (2 - x[i, k] - x[j, k])))
+            #contrainte sur les opérateurs
+            for l in new_operator[i-1]:
+                model.addConstr(c[i] - b[j] <= -M * (1 - y[i, j]) - M * (2 - z[i, l] - z[j, l]))
+                model.addConstr((c[j] - b[i]) <= (-M * y[i, j] - M * (2 - z[i, l] - z[j, l])))
+
 
 
     #print('Obj: %g' % model.ObjVal)
@@ -215,6 +242,8 @@ def PLNE2(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
 
 
 PLNE2(nb_tasks)
+
+
 
 '''
     # Contrainte chaque invité est à une table

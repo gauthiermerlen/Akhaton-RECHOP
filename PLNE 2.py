@@ -79,9 +79,7 @@ class Instance:
         print(operators)
 
 
-file = open("/Users/pierr/OneDrive/Documents/Pierre-Louis/Ponts/2A GI/Recherche "
-            "opérationnelle/sujet_et_instances_projet_REOP22-23/sujet_et_instances_projet_REOP22-23/instances/KIRO"
-            "-tiny.json")
+file = open("C:/Users/gauth/Downloads/sujet_et_instances_projet_REOP22-23 (1)/sujet_et_instances_projet_REOP22-23/instances/KIRO-tiny.json")
 data = json.load(file)
 
 parameters_data = data["parameters"]
@@ -171,21 +169,21 @@ def PLNE2(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
         m[i] = model.addVar(name="m" + str(i), vtype=GRB.INTEGER)  # Machine used for task i
         o[i] = model.addVar(name="o" + str(i), vtype=GRB.INTEGER)  # Operator used for task i
         for j in range(1, nb_tasks+1):
-            y[i, j] = model.addVar(name="y" + str(i) + str(j), vtype=GRB.BINARY)  # 1 si tache i avant j
+            y[i, j] = model.addVar(name="y" + str(i)+","+ str(j), vtype=GRB.BINARY,lb=0, ub=1)  # 1 si tache i avant j
 
         for k in instance.tasks[i-1].machines:
-            x[i, k] = model.addVar(name="x" + str(i) + str(k), vtype=GRB.BINARY)  # 1 si la tache i est faite sur la machine k
+            x[i, k] = model.addVar(name="x" + str(i)+ ","+ str(k), vtype=GRB.BINARY,lb=0, ub=1)  # 1 si la tache i est faite sur la machine k
 
             for l in instance.operators[i-1,k-1]:
-                z[i, k, l] = model.addVar(name="z" + str(i) + str(k) + str(l), vtype=GRB.BINARY)  # 1 si la tache i est faite par l'opérateur l sur la machine k
+                z[i, k, l] = model.addVar(name="z" + str(i)+"," + str(k)+"," + str(l), vtype=GRB.BINARY,lb=0, ub=1)  # 1 si la tache i est faite par l'opérateur l sur la machine k
 
 
 
     for j in range(1,instance.nb_jobs()+1):
         B[j] = model.addVar(name="B" + str(j), vtype=GRB.INTEGER)  # Starting time for job i
-        C[j] = model.addVar(name="x" + str(j), vtype=GRB.INTEGER)  # Finishing time of work j
-        U[j] = model.addVar(name="x" + str(j), vtype=GRB.BINARY, lb=0, ub=1)  # Tardiness of job j
-        T[j] = model.addVar(name="x" + str(j), vtype=GRB.INTEGER)  # Unit of penalty for job j
+        C[j] = model.addVar(name="C" + str(j), vtype=GRB.INTEGER)  # Finishing time of work j
+        U[j] = model.addVar(name="U" + str(j), vtype=GRB.BINARY, lb=0, ub=1)  # Tardiness of job j
+        T[j] = model.addVar(name="T" + str(j), vtype=GRB.INTEGER)  # Unit of penalty for job j
 
 
     # Fonction objectif
@@ -217,7 +215,7 @@ def PLNE2(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
             model.addConstr((b[instance.jobs[j-1].task_sequence[i+1]]) >= c[instance.jobs[j-1].task_sequence[i]])
 
     # Contrainte 6
-    M=1000000
+    M=100000000000000
     for j in range(1, instance.nb_jobs()+1):
         model.addConstr(T[j] >= C[j] - instance.jobs[j-1].due_date)
         model.addConstr(T[j] >= 0)
@@ -226,16 +224,17 @@ def PLNE2(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
 
 
     # Contrainte 7
-    # Définition des yij
+    # Définition des yij : 1 si Bi<Bj et 0 sinon
     for i in range(1,nb_tasks+1):
         for j in range(1,nb_tasks+1):
             model.addConstr(y[i, j] >= (b[j]-b[i])/M)
-            model.addConstr(y[i, j] <= (b[i] - b[j]+M)/M)
-
+            model.addConstr(y[i, j] <= (b[j] - b[i]+M)/M)
     # Définition des xik
+
     for i in range(1,nb_tasks+1):
         s=0
         s2 = 0
+        #model.addConstr(quicksum(x[i, k] for k in instance.tasks[i-1].machines)==1)
         for k in instance.tasks[i - 1].machines:
             s+=x[i, k]
 
@@ -244,27 +243,29 @@ def PLNE2(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
         model.addConstr(s2==1)
         model.addConstr(s==1)
 
+
         # définition des zikl
 
     for i in range(1,nb_tasks+1):
-        for j in range(i+1,nb_tasks+1):
+        for j in range(i+1, nb_tasks+1):
             for k in inter(instance.tasks[i-1].machines, instance.tasks[j-1].machines):
                 #print('i,j',(i,j))
                 #print('i,k',(i,k))
                 #print('j,k',(j,k))
                 #print(instance.tasks[j-1].index)
                 #print(instance.tasks[j-1].machines)
-                model.addConstr(c[i] - b[j] <= -M * (1 - y[i, j]) - M * (2 - x[i, k] - x[j, k]))
-                model.addConstr((c[j] - b[i]) <= (-M * y[i, j] - M * (2 - x[i, k] - x[j, k])))
+                model.addConstr(c[i] - b[j] <= -M * (1 - y[i, j]) + M * (2 - x[i, k] - x[j, k]))
+                model.addConstr((c[j] - b[i]) <= (M * y[i, j] + M * (2 - x[i, k] - x[j, k])))
 
 
+    #for v in model.getVars():
+     #   if str(v.VarName)[0]=="y":
+      #      print(f"{v.VarName} = {v.X}")
             # contrainte sur les opérateurs
-            #for l in inter(instance.operators[i-1,k-1], instance.operators[j-1,k-1]):
-                #model.addConstr(c[i] - b[j] <= -M * (1 - y[i, j]) - M * (2 - x[i, k] - x[j, k])+M*(2-z[i,k,l]-z[j,k,l]))
-                #model.addConstr((c[j] - b[i]) <= (-M * y[i, j] - M * (2 - x[i, k] - x[j, k])+M*(2-z[i,k,l]-z[j,k,l])))
+            for l in inter(instance.operators[i-1,k-1], instance.operators[j-1,k-1]):
+                model.addConstr(c[i] - b[j] <= -M * (1 - y[i, j]) + M * (2 - x[i, k] - x[j, k])+M*(2-z[i,k,l]-z[j,k,l]))
+                model.addConstr((c[j] - b[i]) <= (+M * y[i, j] +M * (2 - x[i, k] - x[j, k])+M*(2-z[i,k,l]-z[j,k,l])))
     model.optimize()
-
-
 
     #print('Obj: %g' % model.ObjVal)
     return('Obj: %g' % model.ObjVal)

@@ -79,9 +79,7 @@ class Instance:
         print(operators)
 
 
-file = open("/Users/pierr/OneDrive/Documents/Pierre-Louis/Ponts/2A GI/Recherche "
-            "opérationnelle/sujet_et_instances_projet_REOP22-23/sujet_et_instances_projet_REOP22-23/instances/KIRO"
-            "-tiny.json")
+file = open("C:/Users/gauth/OneDrive/Bureau/ponts/GI/RECHOP/Akhaton-RECHOP/KIRO-tiny.json")
 data = json.load(file)
 
 parameters_data = data["parameters"]
@@ -130,7 +128,6 @@ def PNLE1(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
     C = {}  # Time at which job is completed
     U = {}  # Unit of penalty
     T = {}  # Tardiness
-
     f = {}  # 1 si bj+pj>=bi O sinon
     g = {}  # 1 si bi>=bj O sinon
     x = {}  # 1 si mi=mj ou oi=oj
@@ -147,6 +144,9 @@ def PNLE1(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
 
     g = {} # 1 si bj+pj>=bi 0 sinon
     f = {} # 1 si bi>=bj
+
+
+
     k = {}
 
 
@@ -193,6 +193,7 @@ def PNLE1(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
     # Définition des contraintes
     # Contrainte 1
     for i in range(1,nb_tasks+1):
+        print(i)
         model.addConstr(c[i] == (b[i] + instance.tasks[i-1].processing_time))
 
 
@@ -204,6 +205,7 @@ def PNLE1(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
     # Contrainte 3
     print(nb_tasks)
     for j in range(instance.nb_jobs()):
+        print(instance.jobs[j].task_sequence[-1])
         model.addConstr(C[j] == c[instance.jobs[j].task_sequence[-1]])
 
     # Contrainte 4
@@ -234,7 +236,7 @@ def PNLE1(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
             model.addConstr(1 - mb[i,j] <= am[i,j])
             model.addConstr(m[i] - m[j] == mp[i,j] - mn[i,j])
             model.addConstr(am[i,j] == mp[i,j] + mn[i,j])
-            model.addConstr(y[i,j] >= (m[i] - m[j])/(2*M))
+            model.addConstr(y[i,j] > (m[i] - m[j])/(2*M))
             model.addConstr(y[i,j] <= (m[i] - m[j]+M) / M)
             model.addConstr(mp[i,j] <= y[i,j]*M)
             model.addConstr(mn[i,j] <= (1-y[i,j]) * M)
@@ -246,7 +248,7 @@ def PNLE1(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
             model.addConstr(1 - ob[i,j] <= ao[i,j])
             model.addConstr(o[i] - o[j] == op[i,j] - on[i,j])
             model.addConstr(ao[i,j] == op[i,j] + on[i,j])
-            model.addConstr(z[i,j] >= (o[i] - o[j]) / (2 * M))
+            model.addConstr(z[i,j] > (o[i] - o[j]) / (2 * M))
             model.addConstr(z[i,j] <= (o[i] - o[j] + M) / M)
             model.addConstr(op[i,j] <= z[i,j] * M)
             model.addConstr(on[i,j] <= (1 - z[i,j]) * M)
@@ -257,14 +259,14 @@ def PNLE1(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
             # Contraintes sur les bi et les bj
     for i in range(1,nb_tasks+1):
         for j in range(1,nb_tasks+1):
-            model.addConstr(b[i]+instance.tasks[i-1].processing_time+b[j]>=instance.tasks[i-1].processing_time*f[i,j])
-            model.addConstr(b[i]-b[j] <= instance.tasks[i-1].processing_time*g[i,j])
+            model.addConstr(b[i]+instance.tasks[i].processing_time+b[j]>=instance.tasks[i].processing_time*f[i,j])
+            model.addConstr(b[i]-b[j] <= instance.tasks[i].processing_time*g[i,j])
 
             # Contraintes sur les f[i][j] et g[i][j]
             model.addConstr(g[i,j] >= (b[i] - b[j])/M)
             model.addConstr(g[i,j] <= (b[i] - b[j]+M) / M)
-            model.addConstr(f[i,j] >= (b[j]+instance.tasks[j-1].processing_time - b[i]) / M)
-            model.addConstr(f[i,j] <= (b[j] +instance.tasks[j-1].processing_time - b[i] + M) / M)
+            model.addConstr(f[i,j] >= (b[j]+instance.tasks[j].processing_time - b[i]) / M)
+            model.addConstr(f[i,j] <= (b[j] +instance.tasks[j].processing_time - b[i] + M) / M)
     model.optimize()
 
     print('Obj: %g' % m.ObjVal)

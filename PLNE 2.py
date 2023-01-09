@@ -122,6 +122,14 @@ def intersection(lst1, lst2):
     lst3 = [value for value in lst1 if value in lst2]
     return lst3
 
+def inter(list1,list2):
+    list=[]
+    if list1 != None and list2 !=None:
+        for k in list1:
+            if k in list2:
+                list.append(k)
+    return list
+
 def new_operator():
     liste=[]
     for i in range(nb_tasks):
@@ -133,7 +141,7 @@ def new_operator():
                         list.append(k)
         liste.append(list)
     return liste
-new_operator=new_operator()
+
 #print(new_operator)
 #print(instance.operators)
 
@@ -154,10 +162,6 @@ def PLNE2(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
 
     y={}    # 1 if task i is performed before task j
     x={}    # 1 if task i is performed on machine k
-    absx = {}   #
-    xp = {}
-    xn = {}
-    a = {}
     z={}    # 1 if task i is performed on machine k with operator o
 
     for i in range(1, nb_tasks+1):
@@ -170,16 +174,10 @@ def PLNE2(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
             y[i, j] = model.addVar(name="y" + str(i) + str(j), vtype=GRB.BINARY)  # 1 si tache i avant j
 
         for k in instance.tasks[i-1].machines:
-            absx[i, k] = model.addVar(name="absx" + str(i) + str(k), vtype=GRB.INTEGER)
-            xp[i, k] = model.addVar(name="xp" + str(i) + str(k), vtype=GRB.INTEGER)
-            xn[i, k] = model.addVar(name="xn" + str(i) + str(k), vtype=GRB.INTEGER)
-            a[i, k] = model.addVar(name="xn" + str(i) + str(k), vtype=GRB.BINARY)
-
-        for k in range(1,nb_machines+1):
             x[i, k] = model.addVar(name="x" + str(i) + str(k), vtype=GRB.BINARY)  # 1 si la tache i est faite sur la machine k
 
-        for l in range(1, nb_operators+1):
-            z[i, l] = model.addVar(name="z" + str(i) + str(l), vtype=GRB.BINARY)  # 1 si la tache i est faite par l'opérateur l
+            for l in instance.operators[i-1,k-1]:
+                z[i, k, l] = model.addVar(name="z" + str(i) + str(k) + str(l), vtype=GRB.BINARY)  # 1 si la tache i est faite par l'opérateur l sur la machine k
 
 
 
@@ -208,7 +206,7 @@ def PLNE2(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
     # Contrainte 3
     for j in range(1,instance.nb_jobs()+1): #vérifiée
         model.addConstr(C[j] == c[instance.jobs[j-1].task_sequence[-1]])
-    print(instance.operators)
+
     # Contrainte 4
     for j in range(1,instance.nb_jobs()+1): #vérifiée
         model.addConstr(B[j] >= instance.jobs[j-1].release_date)
@@ -226,41 +224,45 @@ def PLNE2(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
         model.addConstr(U[j] >= T[j]/M)
         model.addConstr(U[j] <= 1)
 
-    model.optimize()
 
     # Contrainte 7
-    #print('x',x)
-    #print('y',y)
+    # Définition des yij
+    for i in range(1,nb_tasks+1):
+        for j in range(1,nb_tasks+1):
+            model.addConstr(y[i, j] >= (b[j]-b[i])/M)
+            model.addConstr(y[i, j] <= (b[i] - b[j]+M)/M)
+
     # Définition des xik
     for i in range(1,nb_tasks+1):
-        for k in instance.tasks[i-1].machines:
-            model.addConstr(1 - x[i, k] >= absx[i, k] / (2 * M))
-            model.addConstr(1 - x[i, k] <= absx[i, k])
-            model.addConstr(m[i] - k == xp[i, k] - xn[i, k])
-            model.addConstr(absx[i, k] == xp[i, k] + xn[i, k])
-            model.addConstr(a[i, k] >= (m[i] - k) / (2 * M))
-            model.addConstr(a[i, k] <= (m[i] - k + M) / M)
-            model.addConstr(xp[i, k] <= a[i, k] * M)
-            model.addConstr(xn[i, k] <= (1 - y[i, j]) * M)
+        s=0
+        s2 = 0
+        for k in instance.tasks[i - 1].machines:
+            s+=x[i, k]
+
+            for l in instance.operators[i - 1,k - 1]:
+                s2 += z[i, k, l]
+        model.addConstr(s2==1)
+        model.addConstr(s==1)
+
+        # définition des zikl
 
     for i in range(1,nb_tasks+1):
         for j in range(i+1,nb_tasks+1):
-            #Définition de yij
-            model.addConstr(y[i, j] >= (b[j]-b[i])/M)
-            model.addConstr(y[i, j] <= (-b[i] + b[j] + M) / M)
-
-            #contrainte sur les machines
-            for k in instance.tasks[i-1].machines:
+            for k in inter(instance.tasks[i-1].machines, instance.tasks[j-1].machines):
                 #print('i,j',(i,j))
                 #print('i,k',(i,k))
                 #print('j,k',(j,k))
+                #print(instance.tasks[j-1].index)
+                #print(instance.tasks[j-1].machines)
                 model.addConstr(c[i] - b[j] <= -M * (1 - y[i, j]) - M * (2 - x[i, k] - x[j, k]))
                 model.addConstr((c[j] - b[i]) <= (-M * y[i, j] - M * (2 - x[i, k] - x[j, k])))
 
-            #contrainte sur les opérateurs
-            for l in new_operator[i-1]:
-                model.addConstr(c[i] - b[j] <= -M * (1 - y[i, j]) - M * (2 - z[i, l] - z[j, l]))
-                model.addConstr((c[j] - b[i]) <= (-M * y[i, j] - M * (2 - z[i, l] - z[j, l])))
+
+            # contrainte sur les opérateurs
+            #for l in inter(instance.operators[i-1,k-1], instance.operators[j-1,k-1]):
+                #model.addConstr(c[i] - b[j] <= -M * (1 - y[i, j]) - M * (2 - x[i, k] - x[j, k])+M*(2-z[i,k,l]-z[j,k,l]))
+                #model.addConstr((c[j] - b[i]) <= (-M * y[i, j] - M * (2 - x[i, k] - x[j, k])+M*(2-z[i,k,l]-z[j,k,l])))
+    model.optimize()
 
 
 
@@ -271,46 +273,17 @@ def PLNE2(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
 PLNE2(nb_tasks)
 
 
+'''
+print(res)
+
+tiny_path_sol = "/Users/lucassautier/Desktop/Projet RO/instances/KIRO-tiny-sol.json"
+small_path_sol = "/Users/lucassautier/Desktop/Projet RO/instances/KIRO-small-sol.json"
+medium_path_sol = "/Users/lucassautier/Desktop/Projet RO/instances/KIRO-medium-sol.json"
+large_path_sol = "/Users/lucassautier/Desktop/Projet RO/instances/KIRO-large-sol.json"
+with open(small_path_sol, 'w') as fp:
+    json.dump(res, fp)
 
 '''
-    # Contrainte chaque invité est à une table
-    for i in range(I):
-        m.addConstr(quicksum(x[i, k] for k in range(T)) == 1)
-    # Contrainte de capacité des tables
-    # Contrainte de parité
-    # Contrainte de famille
-    for k in range(T):
-        m.addConstr(quicksum(x[i, k] for i in range(I)) <= P)
-        m.addConstr(quicksum(T * x[i, k] * sexe[i] for i in range(I)) <= T + quicksum(sexe[i] for i in range(I)))
-        m.addConstr(quicksum(T * x[i, k] * sexe[i] for i in range(I)) >= - T + quicksum(sexe[i] for i in range(I)))
-        m.addConstr(quicksum(T * x[i, k] * famille[i] for i in range(I)) <= T + quicksum(famille[i] for i in range(I)))
-        m.addConstr(
-            quicksum(T * x[i, k] * famille[i] for i in range(I)) >= - T + quicksum(famille[i] for i in range(I)))
-    # Lien entre y et x ?
-    # entre z et x
-    # entre w et x
-    for i in range(I):
-        for j in range(I):
-            if i != j:
-                for k in range(T):
-                    # m.addConstr(y[i, j, k] <= (1/2)*(x[i, k]+x[j, k])*abs(sexe[i]-sexe[j]))
-                    # m.addConstr(z[i, j, k] <= (1/2)*(x[i, k]+x[j, k])*abs(famille[i]-famille[j]))
-                    m.addConstr(w[i, j, k] <= (1 / 2) * (x[i, k] + x[j, k]) * abs(couple[i][j]))
-    m.optimize()
-    table = []
-
-    for v in x.values():
-        if v.X == 1:
-            lettre = v.VarName
-            l = lettre[1:lettre.find(',')]
-            for k in range(T):
-                if int(lettre[lettre.find(',') + 1:]) == k:
-                    for i in range(I):
-                        if int(lettre[1:lettre.find(',')]) == i:
-                            table.append([i, k])
-
-    return table
-'''''
 
 '''
 Exemple de code pour le projet TD log 

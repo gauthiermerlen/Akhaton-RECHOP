@@ -1,0 +1,7 @@
+digraph "classes" {
+rankdir=BT
+charset="utf-8"
+"PLNE.Instance" [color="black", fontcolor="black", label="{Instance|alpha\lbeta\ljobs\lnb_operators\loperators\ltasks\l|nb_jobs()\lnb_machines()\lnb_operators()\lnb_tasks()\lshow()\l}", shape="record", style="solid"];
+"PLNE.Job" [color="black", fontcolor="black", label="{Job|due_date\lindex\lrelease_date\ltask_sequence\lweight\l|show()\l}", shape="record", style="solid"];
+"PLNE.Task" [color="black", fontcolor="black", label="{Task|index\lmachines\lprocessing_time\l|show()\l}", shape="record", style="solid"];
+}

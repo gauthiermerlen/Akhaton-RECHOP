@@ -79,7 +79,7 @@ class Instance:
         print(operators)
 
 
-file = open("C:/Users/gauth/Downloads/sujet_et_instances_projet_REOP22-23 (1)/sujet_et_instances_projet_REOP22-23/instances/KIRO-tiny.json")
+file = open("C:/Users/gauth/Downloads/sujet_et_instances_projet_REOP22-23 (1)/sujet_et_instances_projet_REOP22-23/instances/KIRO-small.json")
 data = json.load(file)
 
 parameters_data = data["parameters"]
@@ -127,7 +127,6 @@ def inter(list1,list2):
             if k in list2:
                 list.append(k)
     return list
-
 def new_operator():
     liste=[]
     for i in range(nb_tasks):
@@ -141,9 +140,6 @@ def new_operator():
     return liste
 
 #print(new_operator)
-#print(instance.operators)
-
-
 
 
 def PLNE2(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'invités
@@ -169,13 +165,13 @@ def PLNE2(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
         m[i] = model.addVar(name="m" + str(i), vtype=GRB.INTEGER)  # Machine used for task i
         o[i] = model.addVar(name="o" + str(i), vtype=GRB.INTEGER)  # Operator used for task i
         for j in range(1, nb_tasks+1):
-            y[i, j] = model.addVar(name="y" + str(i)+","+ str(j), vtype=GRB.BINARY,lb=0, ub=1)  # 1 si tache i avant j
+            y[i, j] = model.addVar(name="y"+ "," + str(i)+","+ str(j), vtype=GRB.BINARY,lb=0, ub=1)  # 1 si tache i avant j
 
         for k in instance.tasks[i-1].machines:
-            x[i, k] = model.addVar(name="x" + str(i)+ ","+ str(k), vtype=GRB.BINARY,lb=0, ub=1)  # 1 si la tache i est faite sur la machine k
+            x[i, k] = model.addVar(name="x"+ "," + str(i)+ "," + str(k), vtype=GRB.BINARY,lb=0, ub=1)  # 1 si la tache i est faite sur la machine k
 
             for l in instance.operators[i-1,k-1]:
-                z[i, k, l] = model.addVar(name="z" + str(i)+"," + str(k)+"," + str(l), vtype=GRB.BINARY,lb=0, ub=1)  # 1 si la tache i est faite par l'opérateur l sur la machine k
+                z[i, k, l] = model.addVar(name="z"+"," + str(i)+"," + str(k)+"," + str(l), vtype=GRB.BINARY,lb=0, ub=1)  # 1 si la tache i est faite par l'opérateur l sur la machine k
 
 
 
@@ -215,7 +211,7 @@ def PLNE2(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
             model.addConstr((b[instance.jobs[j-1].task_sequence[i+1]]) >= c[instance.jobs[j-1].task_sequence[i]])
 
     # Contrainte 6
-    M=100000000000000
+    M=10000
     for j in range(1, instance.nb_jobs()+1):
         model.addConstr(T[j] >= C[j] - instance.jobs[j-1].due_date)
         model.addConstr(T[j] >= 0)
@@ -230,6 +226,11 @@ def PLNE2(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
             model.addConstr(y[i, j] >= (b[j]-b[i])/M)
             model.addConstr(y[i, j] <= (b[j] - b[i]+M)/M)
     # Définition des xik
+    for i in range(1,nb_tasks+1):
+        for k in instance.tasks[i-1].machines:
+            for l in instance.operators[i-1,k-1]:
+
+                model.addConstr(z[i,k,l]<=x[i,k])
 
     for i in range(1,nb_tasks+1):
         s=0
@@ -237,7 +238,6 @@ def PLNE2(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
         #model.addConstr(quicksum(x[i, k] for k in instance.tasks[i-1].machines)==1)
         for k in instance.tasks[i - 1].machines:
             s+=x[i, k]
-
             for l in instance.operators[i - 1,k - 1]:
                 s2 += z[i, k, l]
         model.addConstr(s2==1)
@@ -254,25 +254,66 @@ def PLNE2(nb_tasks):  # T le nb de tables; P la capacité par table; I le nb d'i
                 #print('j,k',(j,k))
                 #print(instance.tasks[j-1].index)
                 #print(instance.tasks[j-1].machines)
-                model.addConstr(c[i] - b[j] <= -M * (1 - y[i, j]) + M * (2 - x[i, k] - x[j, k]))
-                model.addConstr((c[j] - b[i]) <= (M * y[i, j] + M * (2 - x[i, k] - x[j, k])))
+                model.addConstr(c[i] - b[j] <= +M * (1 - y[i, j]) + M * (2 - x[i, k] - x[j, k]))
+                model.addConstr((c[j] - b[i]) <= (+M * y[i, j] + M * (2 - x[i, k] - x[j, k])))
 
-
+            for p in instance.tasks[i-1].machines:
+                for q in instance.tasks[j-1].machines:
     #for v in model.getVars():
      #   if str(v.VarName)[0]=="y":
       #      print(f"{v.VarName} = {v.X}")
             # contrainte sur les opérateurs
-            for l in inter(instance.operators[i-1,k-1], instance.operators[j-1,k-1]):
-                model.addConstr(c[i] - b[j] <= -M * (1 - y[i, j]) + M * (2 - x[i, k] - x[j, k])+M*(2-z[i,k,l]-z[j,k,l]))
-                model.addConstr((c[j] - b[i]) <= (+M * y[i, j] +M * (2 - x[i, k] - x[j, k])+M*(2-z[i,k,l]-z[j,k,l])))
+                    if q!=p:
+                        for l in inter(instance.operators[i-1,p-1], instance.operators[j-1,q-1]):
+                            model.addConstr(c[i] - b[j] <= +M * (1 - y[i, j]) +M*(2-z[i,p,l]-z[j,q,l]))
+                            model.addConstr((c[j] - b[i]) <= (+M * y[i, j] +M*(2-z[i,p,l]-z[j,q,l])))
     model.optimize()
-
+    tasks_start_time=[0]
+    tasks_machine=[0]*(nb_tasks+1)
+    tasks_operator=[0]*(nb_tasks+1)
+    for v in model.getVars():
+        if (v.VarName)[0]=="x":
+            if v.X==1:
+                k=int(((v.VarName).split(','))[2])
+                i=int(((v.VarName).split(','))[1])
+                tasks_machine[i]=k
+        elif (v.VarName)[0]=="b":
+            tasks_start_time.append(v.X)
+        elif (v.VarName)[0]=="z":
+            #print(v.VarName,v.X)
+            if v.X==1:
+                i = int(((v.VarName).split(','))[1])
+                l = int(((v.VarName).split(','))[3])
+                tasks_operator[i]=l
     #print('Obj: %g' % model.ObjVal)
-    return('Obj: %g' % model.ObjVal)
+    return('Obj: %g' % model.ObjVal),tasks_start_time,tasks_machine,tasks_operator
 
 
-PLNE2(nb_tasks)
+A,B,C,D=PLNE2(nb_tasks)
+print(B)
+Dur=[0]
+for x in instance.tasks:
+    Dur.append(x.processing_time)
+print(Dur)
+print(C)
+print(D)
+res=[]
+for i in range(1, nb_tasks+1):
+    dic={}
+    dic["task"] = i
+    dic["start"] = int(B[i])
+    dic["machine"] = int(C[i])
+    dic["operator"] = int(D[i])
+    res.append(dic)
 
+print(res)
+
+tiny_path_sol = "C:/Users/gauth/OneDrive/Bureau/ponts/GI/RECHOP/Akhaton-RECHOP/KIRO-tiny.json"
+small_path_sol = "C:/Users/gauth/OneDrive/Bureau/ponts/GI/RECHOP/Akhaton-RECHOP/KIRO-small.json"
+medium_path_sol = "C:/Users/gauth/OneDrive/Bureau/ponts/GI/RECHOP/Akhaton-RECHOP/KIRO-medium.json"
+large_path_sol = "C:/Users/gauth/OneDrive/Bureau/ponts/GI/RECHOP/Akhaton-RECHOP/KIRO-large.json"
+with open(small_path_sol, 'w') as fp:
+    json.dump(res, fp)
 
 '''
 print(res)
